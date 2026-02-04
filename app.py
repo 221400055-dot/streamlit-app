@@ -1,10 +1,12 @@
+import streamlit as st
 import copy
 
+# ---------------- CSP CLASS (UNCHANGED LOGIC) ----------------
 class ExamSchedulerCSP:
     def __init__(self, exams, slots, rooms, student_enrollments, room_capacities, teacher_assignments):
         self.variables = exams
         self.domains = {
-            exam: [(slot, room) for slot in slots for room in rooms] 
+            exam: [(slot, room) for slot in slots for room in rooms]
             for exam in exams
         }
         self.student_enrollments = student_enrollments
@@ -15,23 +17,17 @@ class ExamSchedulerCSP:
     def is_consistent(self, exam, assignment, slot_room):
         chosen_slot, chosen_room = slot_room
 
-        # Room capacity check
         if self.exam_sizes[exam] > self.room_capacities[chosen_room]:
             return False
-        
-        for other_exam, (other_slot, other_room) in assignment.items():
-            # Same time slot constraints
-            if chosen_slot == other_slot:
 
+        for other_exam, (other_slot, other_room) in assignment.items():
+            if chosen_slot == other_slot:
                 if chosen_room == other_room:
                     return False
-
                 if self.student_enrollments[exam].intersection(self.student_enrollments[other_exam]):
                     return False
-
                 if self.teacher_assignments[exam] == self.teacher_assignments[other_exam]:
                     return False
-
         return True
 
     def forward_checking(self, exam, slot_room, assignment, local_domains):
@@ -42,7 +38,6 @@ class ExamSchedulerCSP:
                     if self.is_consistent(unassigned, {**assignment, exam: slot_room}, val):
                         new_domain.append(val)
                 local_domains[unassigned] = new_domain
-
                 if not new_domain:
                     return False
         return True
@@ -51,73 +46,67 @@ class ExamSchedulerCSP:
         if len(assignment) == len(self.variables):
             return assignment
 
-        unassigned = [v for v in self.variables if v not in assignment]
-        exam = unassigned[0]
+        exam = [v for v in self.variables if v not in assignment][0]
 
         for slot_room in local_domains[exam]:
             if self.is_consistent(exam, assignment, slot_room):
                 assignment[exam] = slot_room
-
                 temp = copy.deepcopy(local_domains)
                 if self.forward_checking(exam, slot_room, assignment, temp):
                     result = self.backtrack(assignment, temp)
                     if result:
                         return result
-                
                 del assignment[exam]
-
         return None
 
 
-# -----------------------------------------------------------
-# USER INPUT INTERFACE (Console Form)
-# -----------------------------------------------------------
+# ---------------- STREAMLIT UI ----------------
+st.title("Exam Timetable Scheduler (CSP Based)")
 
-print("\n--- Exam Timetable Scheduler (CSP Based) ---\n")
+st.header("Basic Information")
 
-# Number of exams
-num_exams = int(input("Enter number of subjects: "))
+num_exams = st.number_input("Number of subjects", min_value=1, step=1)
+
 exams = []
-
 for i in range(num_exams):
-    exams.append(input(f"Enter subject {i+1} name: "))
+    exams.append(st.text_input(f"Subject {i+1} name"))
 
-# Rooms
-num_rooms = int(input("\nEnter number of rooms: "))
+num_rooms = st.number_input("Number of rooms", min_value=1, step=1)
+
 rooms = []
 room_caps = {}
-
 for i in range(num_rooms):
-    room = input(f"Enter room {i+1} name: ")
-    rooms.append(room)
-    room_caps[room] = int(input(f"Capacity of {room}: "))
+    room = st.text_input(f"Room {i+1} name")
+    cap = st.number_input(f"Capacity of room {i+1}", min_value=1, step=1)
+    if room:
+        rooms.append(room)
+        room_caps[room] = cap
 
-# Time slots
-num_slots = int(input("\nEnter number of time slots: "))
+num_slots = st.number_input("Number of time slots", min_value=1, step=1)
+
 slots = []
 for i in range(num_slots):
-    slots.append(input(f"Slot {i+1} (e.g., Monday 9AM): "))
+    slots.append(st.text_input(f"Slot {i+1} (e.g., Monday 9AM)"))
 
-# Student enrollments
+st.header("Enrollments & Teachers")
+
 enrollments = {}
-print("\nEnter enrolled students for each exam (comma-separated):")
-for exam in exams:
-    students = input(f"Students in {exam}: ").replace(" ", "").split(",")
-    enrollments[exam] = set(students)
-
-# Teacher assignments
 teachers = {}
-print("\nEnter teacher for each exam:")
+
 for exam in exams:
-    teachers[exam] = input(f"Teacher for {exam}: ")
+    students = st.text_input(f"Students in {exam} (comma separated)")
+    enrollments[exam] = set(students.replace(" ", "").split(",")) if students else set()
+    teachers[exam] = st.text_input(f"Teacher for {exam}")
 
-# Create and solve CSP
-scheduler = ExamSchedulerCSP(exams, slots, rooms, enrollments, room_caps, teachers)
-solution = scheduler.backtrack({}, scheduler.domains)
+# ---------------- RUN BUTTON ----------------
+if st.button("Generate Timetable"):
+    scheduler = ExamSchedulerCSP(exams, slots, rooms, enrollments, room_caps, teachers)
+    solution = scheduler.backtrack({}, scheduler.domains)
 
-print("\n--- Generated Timetable ---")
-if solution:
-    for exam, (slot, room) in solution.items():
-        print(f"{exam}: {slot} in {room}")
-else:
-    print("No valid timetable possible with these constraints.")
+    st.subheader("Generated Timetable")
+
+    if solution:
+        for exam, (slot, room) in solution.items():
+            st.success(f"{exam}: {slot} in {room}")
+    else:
+        st.error("No valid timetable possible with these constraints.")
