@@ -146,3 +146,4 @@ if st.button("Generate Timetable"):
             # Display all conflicts
             for msg in set(student_conflicts + teacher_conflicts + room_conflicts):
                 st.warning(msg)
+ 
